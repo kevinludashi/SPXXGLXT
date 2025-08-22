@@ -1275,6 +1275,7 @@
     <!-- 导出订单模态框 -->
     <div id="exportOrderModal" class="export-order-modal">
         <div class="export-order-content">
+            <!-- 问题1修复：添加关闭按钮 -->
             <span class="close" onclick="closeModal('exportOrderModal')">&times;</span>
             <h2 style="margin-bottom: 15px; font-size: 16px;">导出订单信息</h2>
             <div class="form-group">
@@ -1282,8 +1283,8 @@
                 <input type="text" id="exportPlatform" placeholder="请输入平台名称">
             </div>
             <div class="form-group">
-                <label for="exportTime">时间</label>
-                <input type="datetime-local" id="exportTime">
+                <label for="exportDate">日期</label>
+                <input type="date" id="exportDate">
             </div>
             <div class="form-group">
                 <label for="exportOrderNumber">订单号</label>
@@ -1356,7 +1357,7 @@
                 const defaultValues = localStorage.getItem('defaultOrderValues');
                 if (defaultValues) {
                     const values = JSON.parse(defaultValues);
-                    defaultOrderShipping = values.shiping || 0;
+                    defaultOrderShipping = values.shipping || 0;
                     defaultPackingFee = values.packing || 0;
                     defaultOtherFee = values.other || 0;
                 }
@@ -1989,7 +1990,7 @@
                     } catch (error) {
                         console.error('处理行数据失败:', error);
                         errorCount++;
-                    }
+                        }
                 });
                 if (importedCount > 0) {
                     saveToLocalStorage();
@@ -2144,10 +2145,9 @@
                 const itemTotalCost = (product.totalCost || 0) * item.quantity;
                 totalCartCost += itemTotalCost;
                 // 添加图片预览
-                const imageHtml = product.imageUrl ? 
-                    `<img src="${product.imageUrl}" alt="${product.productName}" onerror="this.style.display='none'">` : 
+                const imageHtml = product.imageUrl ?
+                    `<img src="${product.imageUrl}" alt="${product.productName}" onerror="this.style.display='none'">` :
                     '<div class="no-image">无图</div>';
-                
                 html += `
                     <div class="cart-item">
                         <div class="cart-item-image">${imageHtml}</div>
@@ -2230,16 +2230,14 @@
         }
         // --- 新增函数：打开导出订单模态框 ---
         function openExportOrderModal() {
-            // 设置时间输入框的默认值为当前日期时间
+            // 设置时间输入框的默认值为当前日期
             const now = new Date();
-            // 格式化为 YYYY-MM-DDTHH:mm 以符合 datetime-local 输入框的要求
+            // 格式化为 YYYY-MM-DD 以符合 date 输入框的要求
             const year = now.getFullYear();
             const month = String(now.getMonth() + 1).padStart(2, '0');
             const day = String(now.getDate()).padStart(2, '0');
-            const hours = String(now.getHours()).padStart(2, '0');
-            const minutes = String(now.getMinutes()).padStart(2, '0');
-            const defaultDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
-            document.getElementById('exportTime').value = defaultDateTime;
+            const defaultDate = `${year}-${month}-${day}`;
+            document.getElementById('exportDate').value = defaultDate;
             // 可以在这里预填充一些其他信息，如果需要的话
             document.getElementById('exportOrderModal').style.display = 'block';
         }
@@ -2251,22 +2249,26 @@
             event.target.classList.add('selected');
             document.getElementById('copySuccessMessage').style.display = 'none'; // 隐藏之前的成功消息
         }
-        // --- 新增函数：执行导出 ---
-        function performExport() {
+    
+        // --- 修改后的performExport函数 (修复移动端复制问题) ---
+        async function performExport() {
             const platform = document.getElementById('exportPlatform').value.trim();
-            const timeInput = document.getElementById('exportTime').value; // 获取 datetime-local 的值
+            const dateInput = document.getElementById('exportDate').value;
             const orderNumber = document.getElementById('exportOrderNumber').value.trim();
             const recipientInfo = document.getElementById('exportRecipientInfo').value.trim();
-            // 将 datetime-local 的值转换为更易读的格式 (可选)
-            let formattedTime = timeInput;
-            if (timeInput) {
-                const dateObj = new Date(timeInput);
-                formattedTime = dateObj.toLocaleString('zh-CN'); // 转换为本地时间字符串
+    
+            // 问题3修复：只使用日期部分
+            let formattedDate = dateInput;
+            if (dateInput) {
+                const dateObj = new Date(dateInput);
+                formattedDate = dateObj.toLocaleDateString('zh-CN');
             }
-            if (!platform || !timeInput || !orderNumber || !recipientInfo) { // 检查 timeInput 而非 formattedTime
+    
+            if (!platform || !dateInput || !orderNumber || !recipientInfo) {
                 alert('请填写所有订单信息！');
                 return;
             }
+    
             // 获取利润计算结果
             const productTotalCost = document.getElementById('productTotalCost').textContent;
             const orderShippingCost = document.getElementById('orderShippingCost').textContent;
@@ -2275,125 +2277,117 @@
             const orderTotalCost = document.getElementById('orderTotalCost').textContent;
             const orderSalePrice = document.getElementById('orderSalePrice').textContent;
             const profitAmount = document.getElementById('profitAmount').textContent;
-            // 获取购物车商品详情 (包含数量和小计)
+    
+            // 获取购物车商品详情
             let cartDetails = [];
             cartItems.forEach(item => {
                 const product = products[item.index];
                 if (product) {
-                     // 生成单个商品的详细字符串，例如： "商品名称(SKU) x 数量 = 小计"
-                     const itemDetail = `${product.productName}(${product.sku}) x ${item.quantity} = ${(product.totalCost * item.quantity).toFixed(2)}`;
-                     cartDetails.push(itemDetail);
+                    const itemDetail = `${product.productName}(${product.sku}) x ${item.quantity} = ${(product.totalCost * item.quantity).toFixed(2)}`;
+                    cartDetails.push(itemDetail);
                 }
             });
-            // --- 修改3：将商品详情用换行符连接 ---
-            const cartDetailsString = cartDetails.join('\n'); // 用换行符分隔不同商品
-            // --- 修改3结束 ---
-
-            // 准备导出数据对象 (用于 XLSX)
-            const exportDataForXlsx = {
-                平台: platform,
-                时间: formattedTime, // 使用格式化后的时间
-                订单号: orderNumber,
-                收件信息: recipientInfo,
-                商品详情: cartDetailsString,
-                商品总成本: productTotalCost,
-                订单运费: orderShippingCost,
-                打包费: packingCost,
-                其他费用: otherCostResult,
-                订单总成本: orderTotalCost,
-                订单售价: orderSalePrice,
-                利润: profitAmount
-            };
+            const cartDetailsString = cartDetails.join('\n'); // 使用 \n 换行符
+    
             if (selectedExportFormat === 'xlsx') {
                 // 导出为 XLSX
                 try {
-                    // 包含商品详情的 XLSX 表头
                     const ws = XLSX.utils.aoa_to_sheet([
-                        ['平台', '时间', '订单号', '收件信息', '商品详情', '商品总成本', '订单运费', '打包费', '其他费用', '订单总成本', '订单售价', '利润'],
-                        [platform, formattedTime, orderNumber, recipientInfo, cartDetailsString, productTotalCost, orderShippingCost, packingCost, otherCostResult, orderTotalCost, orderSalePrice, profitAmount]
+                        ['平台', '日期', '订单号', '收件信息', '商品详情', '商品总成本', '订单运费', '打包费', '其他费用', '订单总成本', '订单售价', '利润'],
+                        [platform, formattedDate, orderNumber, recipientInfo, cartDetailsString, productTotalCost, orderShippingCost, packingCost, otherCostResult, orderTotalCost, orderSalePrice, profitAmount]
                     ]);
                     const wb = XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(wb, ws, '订单信息');
                     const fileName = `订单_${orderNumber}_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.xlsx`;
                     XLSX.writeFile(wb, fileName);
                     alert('订单信息已导出为 XLSX 文件！');
-                    closeModal('exportOrderModal'); // 导出成功后关闭模态框
+                    closeModal('exportOrderModal');
                 } catch (error) {
                     console.error('导出 XLSX 失败:', error);
                     alert('导出 XLSX 文件失败，请重试');
                 }
             } else {
-                // 导出为文本 (每行一个信息，末尾加逗号)
-                // --- 修改3：构建带字段名和换行的文本，商品详情内部也换行 ---
+                // 导出为文本
                 let textLines = [
-                    `平台: ${platform},`,
-                    `时间: ${formattedTime},`,
-                    `订单号: ${orderNumber},`,
-                    `收件信息: ${recipientInfo},`,
+                    `平台: ${platform}`,
+                    `日期: ${formattedDate}`,
+                    `订单号: ${orderNumber}`,
+                    `收件信息: ${recipientInfo}`,
                     `商品详情:`
                 ];
-                // 将商品详情逐行添加
                 if (cartDetails.length > 0) {
-                    textLines = textLines.concat(cartDetails.map(detail => `  ${detail}`)); // 缩进表示是详情的一部分
+                    textLines = textLines.concat(cartDetails.map(detail => `  ${detail}`));
                 } else {
                     textLines.push(`  (无商品)`);
                 }
                 textLines = textLines.concat([
-                    `商品总成本: ${productTotalCost},`,
-                    `订单运费: ${orderShippingCost},`,
-                    `打包费: ${packingCost},`,
-                    `其他费用: ${otherCostResult},`,
-                    `订单总成本: ${orderTotalCost},`,
-                    `订单售价: ${orderSalePrice},`,
-                    `利润: ${profitAmount},`
+                    `商品总成本: ${productTotalCost}`,
+                    `订单运费: ${orderShippingCost}`,
+                    `打包费: ${packingCost}`,
+                    `其他费用: ${otherCostResult}`,
+                    `订单总成本: ${orderTotalCost}`,
+                    `订单售价: ${orderSalePrice}`,
+                    `利润: ${profitAmount}`
                 ]);
-                const textToCopy = textLines.join('\n'); // 使用换行符连接
-                // --- 修改3结束 ---
-
-                // 复制到剪贴板 (兼容手机端)
-                const textarea = document.createElement('textarea');
-                textarea.value = textToCopy;
-                textarea.setAttribute('readonly', '');
-                textarea.style.position = 'absolute';
-                textarea.style.left = '-9999px';
-                document.body.appendChild(textarea);
-                
-                // 兼容手机端的选择文本
-                if (navigator.userAgent.match(/ipad|iphone|android/i)) {
-                    const range = document.createRange();
-                    range.selectNodeContents(textarea);
-                    const selection = window.getSelection();
-                    selection.removeAllRanges();
-                    selection.addRange(range);
-                    textarea.setSelectionRange(0, 999999);
-                } else {
-                    textarea.select();
-                }
-                
-                let success = false;
+                const textToCopy = textLines.join('\n'); // 使用 \n 换行符
+    
+                // 问题2修复：改进移动端复制功能
                 try {
-                    success = document.execCommand('copy');
+                    // 创建一个临时的 textarea 元素
+                    const textArea = document.createElement("textarea");
+                    textArea.value = textToCopy;
+                    // 防止在 iOS Safari 中缩放
+                    textArea.style.fontSize = '12pt';
+                    // 将元素移出屏幕外，使其不可见
+                    textArea.style.position = 'fixed';
+                    textArea.style.left = '-9999px';
+                    textArea.style.top = '-9999px';
+                    document.body.appendChild(textArea);
+    
+                    // 选择并复制文本
+                    textArea.select();
+                    textArea.setSelectionRange(0, 99999); // 对于移动设备
+    
+                    let success = false;
+                    try {
+                        success = document.execCommand('copy');
+                    } catch (err) {
+                        console.warn('document.execCommand 失败:', err);
+                    }
+    
+                    // 清理
+                    document.body.removeChild(textArea);
+    
                     if (success) {
-                        // 显示成功消息
-                        document.getElementById('copySuccessMessage').style.display = 'block';
-                        // 可选：几秒后自动隐藏消息
-                        setTimeout(() => {
-                            if (document.getElementById('copySuccessMessage').style.display === 'block') {
-                                document.getElementById('copySuccessMessage').style.display = 'none';
-                            }
-                        }, 3000); // 3秒后隐藏
+                        showCopySuccess();
                     } else {
-                        throw new Error('复制失败');
+                        // 如果上述方法失败，尝试使用现代的Clipboard API
+                        if (navigator.clipboard && window.isSecureContext) {
+                            await navigator.clipboard.writeText(textToCopy);
+                            showCopySuccess();
+                        } else {
+                            // 如果所有方法都失败，提示用户手动复制
+                            throw new Error('复制到剪贴板失败，请手动复制。');
+                        }
                     }
                 } catch (err) {
                     console.error('复制失败:', err);
-                    // 备用方案：提示用户手动复制
-                    alert('复制到剪贴板失败，请手动复制以下内容：\n\n' + textToCopy);
-                } finally {
-                    document.body.removeChild(textarea);
+                    // 提示用户手动复制
+                    alert(`复制失败或不被支持。\n请手动复制以下文本：\n\n${textToCopy}`);
                 }
             }
         }
+    
+        // 显示复制成功消息
+        function showCopySuccess() {
+            const successMsg = document.getElementById('copySuccessMessage');
+            successMsg.style.display = 'block';
+            // 3秒后隐藏消息
+            setTimeout(() => {
+                successMsg.style.display = 'none';
+            }, 3000);
+        }
+    
         // 显示所有自动完成选项（无输入时显示全部）
         function showAllAutocomplete(inputId, dropdownId, fieldName) {
             const input = document.getElementById(inputId);
