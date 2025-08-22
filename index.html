@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>自研商品信息管理系统 V7.250821.03 </title>
+    <title>自研商品信息管理系统 V7.250822.01 </title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <style>
@@ -938,6 +938,30 @@
             font-size: 12px; /* 稍大字体 */
             padding: 12px 0; /* 增加上下内边距 */
         }
+        /* 购物车商品图片样式 */
+        .cart-item-image {
+            width: 30px;
+            height: 30px;
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+        .cart-item-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 3px;
+        }
+        .cart-item-image .no-image {
+            width: 100%;
+            height: 100%;
+            background: #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 8px;
+            color: #999;
+            border-radius: 3px;
+        }
         /* --- 新增样式结束 --- */
 
         /* --- 新增的导出订单模态框样式 --- */
@@ -998,7 +1022,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>自研商品信息管理系统 V7.250821.03 </h1>
+            <h1>自研商品信息管理系统 V7.250822.01 </h1>
             <button class="btn-primary" onclick="openAddModal()">录入商品</button>
             <button class="btn-secondary" onclick="openBatchImportExport()">批量操作</button>
             <button class="btn-secondary" onclick="openProfitCalculator()">利润计算器</button>
@@ -1043,7 +1067,7 @@
             <button class="clear-data-btn-footer" onclick="openClearDataModal()">清理所有数据</button>
         </div>
 		<div style="text-align: center; font-size: 12px; color: #999; margin-top: 10px; padding-bottom: 20px;">
-		    kevin鲁大师 版权所有 盗用必究 版本号：20250821.v7.03
+		    kevin鲁大师 版权所有 盗用必究 版本号：20250822.v7.01
 		</div>
     </div>
     <!-- 图片放大模态框 -->
@@ -1211,7 +1235,7 @@
             <!-- 计算结果 (保持不变) -->
             <div id="profitResult" style="display: none;">
                 <div class="result-item">
-                    <strong>结算信息</strong>
+                    <strong>订单费用明细</strong>
                     <div class="result-line">
                         <span class="result-label">商品总成本:</span>
                         <span class="result-value">¥<span id="productTotalCost"></span></span>
@@ -1332,7 +1356,7 @@
                 const defaultValues = localStorage.getItem('defaultOrderValues');
                 if (defaultValues) {
                     const values = JSON.parse(defaultValues);
-                    defaultOrderShipping = values.shipping || 0;
+                    defaultOrderShipping = values.shiping || 0;
                     defaultPackingFee = values.packing || 0;
                     defaultOtherFee = values.other || 0;
                 }
@@ -2119,8 +2143,14 @@
                 if (!product) return; // 防止商品被删除后购物车仍有引用
                 const itemTotalCost = (product.totalCost || 0) * item.quantity;
                 totalCartCost += itemTotalCost;
+                // 添加图片预览
+                const imageHtml = product.imageUrl ? 
+                    `<img src="${product.imageUrl}" alt="${product.productName}" onerror="this.style.display='none'">` : 
+                    '<div class="no-image">无图</div>';
+                
                 html += `
                     <div class="cart-item">
+                        <div class="cart-item-image">${imageHtml}</div>
                         <div class="cart-item-info">
                             <div class="cart-item-name" title="${product.productName}">${product.productName}</div>
                             <div class="cart-item-sku" title="${product.sku}">${product.sku}</div>
@@ -2320,20 +2350,48 @@
                 const textToCopy = textLines.join('\n'); // 使用换行符连接
                 // --- 修改3结束 ---
 
-                // 复制到剪贴板
-                navigator.clipboard.writeText(textToCopy).then(() => {
-                    // 显示成功消息
-                    document.getElementById('copySuccessMessage').style.display = 'block';
-                    // 可选：几秒后自动隐藏消息
-                    setTimeout(() => {
-                        if (document.getElementById('copySuccessMessage').style.display === 'block') {
-                            document.getElementById('copySuccessMessage').style.display = 'none';
-                        }
-                    }, 3000); // 3秒后隐藏
-                }).catch(err => {
+                // 复制到剪贴板 (兼容手机端)
+                const textarea = document.createElement('textarea');
+                textarea.value = textToCopy;
+                textarea.setAttribute('readonly', '');
+                textarea.style.position = 'absolute';
+                textarea.style.left = '-9999px';
+                document.body.appendChild(textarea);
+                
+                // 兼容手机端的选择文本
+                if (navigator.userAgent.match(/ipad|iphone|android/i)) {
+                    const range = document.createRange();
+                    range.selectNodeContents(textarea);
+                    const selection = window.getSelection();
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                    textarea.setSelectionRange(0, 999999);
+                } else {
+                    textarea.select();
+                }
+                
+                let success = false;
+                try {
+                    success = document.execCommand('copy');
+                    if (success) {
+                        // 显示成功消息
+                        document.getElementById('copySuccessMessage').style.display = 'block';
+                        // 可选：几秒后自动隐藏消息
+                        setTimeout(() => {
+                            if (document.getElementById('copySuccessMessage').style.display === 'block') {
+                                document.getElementById('copySuccessMessage').style.display = 'none';
+                            }
+                        }, 3000); // 3秒后隐藏
+                    } else {
+                        throw new Error('复制失败');
+                    }
+                } catch (err) {
                     console.error('复制失败:', err);
-                    alert('复制到剪贴板失败，请手动复制以下内容：\n' + textToCopy);
-                });
+                    // 备用方案：提示用户手动复制
+                    alert('复制到剪贴板失败，请手动复制以下内容：\n\n' + textToCopy);
+                } finally {
+                    document.body.removeChild(textarea);
+                }
             }
         }
         // 显示所有自动完成选项（无输入时显示全部）
